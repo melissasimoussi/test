@@ -1,0 +1,128 @@
+crds:
+  install: true
+
+namespaces: ""
+teamInstancesAreClusterScoped: true
+
+argocd:
+  nameOverride: argocd
+  ## Custom resource configuration
+  crds:
+    # -- Install and upgrade CRDs
+    install: false
+
+  global:
+    # Default image used by all components
+    image:
+      repository: quay.io/syself/argocd
+      tag: "v0.0.13-alpha.5"
+      imagePullPolicy: Always
+
+  ## Argo Configs
+  configs:
+    # General Argo CD configuration
+    ## Ref: https://github.com/argoproj/argo-cd/blob/master/docs/operator-manual/argocd-cm.yaml
+    cm:
+      # -- Create the argocd-cm configmap for [declarative setup]
+      create: true
+      # -- Argo CD's externally facing base URL (optional). Required when configuring SSO
+      url: "example.com"
+      resource.exclusions: |
+        - apiGroups:
+            - tekton.dev
+          clusters:
+            - '*'
+          kinds:
+            - TaskRun
+            - PipelineRun
+        - apiGroups:
+            - cilium.io
+          kinds:
+            - CiliumIdentity
+          clusters:
+            - "*"
+      # configManagementPlugins: |
+      #   - name: helmfile
+      #     init:
+      #       command: ["/bin/bash", "-c"]
+      #       args:
+      #         - >
+      #           helmfile repos ;
+      #           helm dependency update ;
+      #           true
+      #     generate:
+      #       command: ["/bin/bash", "-c"]
+      #       args: ["helmfile --namespace $ARGOCD_APP_NAMESPACE template --skip-deps | sed -e '1,/---/d' | sed -e 's|apiregistration.k8s.io/v1beta1|apiregistration.k8s.io/v1|g'"]
+
+    params:
+      # -- Run server without TLS
+      server.insecure: true
+    rbac:
+      create: true
+      policy.csv: |
+        g, ArgoCDUsers, role:readonly
+        g, system:cluster-admins, role:admin
+        g, ArgoCDAdmins, role:admin
+
+  redis-ha:
+    enabled: true
+
+  dex:
+    enabled: false
+
+  controller:
+    clusterAdminAccess:
+      enabled: true
+    replicas: 2
+    pdb:
+      enabled: true
+      minAvailable: 1
+
+  server:
+    clusterAdminAccess:
+      enabled: true
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+    pdb:
+      enabled: true
+      minAvailable: 1
+    ingress:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      hosts:
+        - example.com
+      tls:
+      - secretName: argocd-wildcard
+        hosts:
+          - example.com
+    ingressGrpc:
+      enabled: true
+      ingressClassName: nginx
+      annotations:
+        nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+      hosts:
+        - example.com
+      tls:
+      - secretName: argocd-wildcard
+        hosts:
+          - example.com
+
+  repoServer:
+    clusterAdminAccess:
+      enabled: true
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+    pdb:
+      enabled: true
+      minAvailable: 1
+
+  applicationSet:
+    replicaCount: 2
+    pdb:
+      enabled: true
+      minAvailable: 1

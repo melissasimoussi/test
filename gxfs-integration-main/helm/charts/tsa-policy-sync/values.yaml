@@ -1,0 +1,5 @@
+name: tsa-sync-policy
+image: 
+  repository: ""
+  name: ""
+  pullPolicy: Always

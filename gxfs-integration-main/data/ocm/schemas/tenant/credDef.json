@@ -1,0 +1,11 @@
+{
+    "schemaID": "{SchemaID}",
+    "name": "tenantCredential-integration-1.0",
+    "isRevokable": false,
+    "isAutoIssue": false,
+    "expiryHours": "120",
+    "createdBy": "GXFS-Integration",
+    "tag":"integration",
+    "supportRevocation":true
+  }
+  

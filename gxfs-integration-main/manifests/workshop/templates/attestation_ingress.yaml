@@ -1,0 +1,30 @@
+{{- if .Values.attestation.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ template "app.name" . }}-attestation
+  namespace: {{ .Values.attestation.namespace }}
+  ingressClassName: nginx
+  annotations:
+{{ toYaml .Values.ingress.annotations | indent 4 }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+{{- if .Values.ingress.tlsEnabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.frontendDomain }}
+      secretName: {{ .Values.ingress.frontendTlsSecretName }}
+{{- end }}
+  rules:
+    - host: {{ .Values.ingress.frontendDomain }}
+      http:
+        paths:
+          - path: /api/workshop/attestation(/|$)(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Values.attestation.service }}
+                port:
+                  number: {{ .Values.attestation.port }}
+{{- end }}

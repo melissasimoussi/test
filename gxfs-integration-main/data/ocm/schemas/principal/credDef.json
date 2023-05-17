@@ -1,0 +1,11 @@
+
+{
+  "schemaID": "U7hmG46d6rgM1hhb22AiEg:2:principalCredential-1.0-integration:1.0.0",
+  "name": "principalCredential-integration-1.0",
+  "isRevokable": false,
+  "isAutoIssue": false,
+  "expiryHours": "120",
+  "createdBy": "GXFS-Integration",
+  "tag":"integration",
+  "supportRevocation":true
+}

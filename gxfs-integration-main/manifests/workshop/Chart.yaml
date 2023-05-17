@@ -1,0 +1,12 @@
+apiVersion: v2
+name: workshop
+description: |
+  This chart install and configures: 
+  * Workshop Ingresses
+  * Workshop Tools
+type: application
+version: 1.0.1
+dependencies:
+  - name: library
+    version: 1.0.0
+    repository: "https://gitlab.com/api/v4/projects/40471958/packages/helm/Integration/"

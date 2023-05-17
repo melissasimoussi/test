@@ -1,0 +1,406 @@
+source: https://gitlab.com/gaia-x/data-infrastructure-federation-services/gxfs-integration.git
+sourceRef: main
+project: gxfs-compliance
+
+applications:
+  - name: rabbitmq
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://charts.bitnami.com/bitnami
+    chartName: rabbitmq
+    sourceRef: 11.2.1
+
+  - name: otel-collector
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://open-telemetry.github.io/opentelemetry-helm-charts
+    chartName: opentelemetry-collector
+    sourceRef: 0.43.2
+    values:
+      mode: deployment
+
+  - name: dss
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: dss
+    sourceRef: 1.0.1
+
+  - name: compliance-postgres
+    namespace: gxfs-compliance
+    enabled: true
+    sourcePath: manifests/postgres
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      fullnameOverride: compliance-postgres
+      ignoreHelmHooks: true
+      postgres:
+        - name: compliance-postgres-db
+          enabled: true
+          instances: 3
+          storage:
+            size: 2Gi
+            storageClass: cinder-default
+          pooler:
+            - enabled: true
+              type: rw
+              instances: 3
+              pgbouncer:
+                poolMode: session
+                authQuerySecret:
+                  name: integratio-db-superuser
+                authQuery: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
+
+  - name: acapy
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/33394178/packages/helm/Integration
+    chartName: acapy
+    sourceRef: 1.1.12
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/not-acapy(/|$)(.*)
+                port: 8030
+      logLevel: debug
+      postgres:
+        superUser:
+          usernameSecret:
+            name: compliance-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: compliance-postgres-db-superuser
+            key: password
+        database: notacapy
+        host:
+          name: compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local
+          port: 5432
+      endpoint: https://integration.gxfs.dev/api/not-acapy
+      genesisUrl: https://raw.githubusercontent.com/IDunion/IDunion_TestNet_Genesis/master/pool_transactions_genesis
+
+  - name: oidc-identity-resolver
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: oidc-identity-resolver
+    sourceRef: 1.1.3
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      http:
+        port: 8085
+      service:
+        port: 8080
+      config:
+        DEMO_IDENTITY_OIDC_EXTERNAL_URL: https://integration.gxfs.dev/api/oidc-identity-resolver
+        QUARKUS_DATASOURCE_REACTIVE_URL: postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/oidc-identity-resolver
+        QUARKUS_DATASOURCE_USERNAME: oidc-identity-resolver
+        QUARKUS_HTTP_ACCESS_LOG_ENABLED: "true"
+        QUARKUS_LOG_LEVEL: DEBUG
+        QUARKUS_OIDC_AUTH_SERVER_URL: https://sso-integration.gxfs.dev/realms/notarization
+        QUARKUS_REST_CLIENT_PROFILE_API_URL: http://profile:80
+        QUARKUS_REST_CLIENT_REQUESTPROCESSING_API_URL: http://request-processing:80
+        QUARKUS_REST_CLIENT_REVOCATION_API_URL: http://revocation:80
+        QUARKUS_REST_CLIENT_SSI_ISSUANCE_API_URL: http://ssi-issuance-controller:80/
+        REDIRECT_LOGIN_FAILURE_URL: http://localhost:30123
+        REDIRECT_LOGIN_SUCCESS_URL: http://localhost:30123
+        QUARKUS_OPENTELEMETRY_TRACER_EXPORTER_OTLP_ENDPOINT: http://otel-collector-opentelemetry-collector.gxfs-compliance.svc.cluster.local:4317
+        FLYWAY_JDBC_URL: jdbc:postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/oidc-identity-resolver
+
+      postgres:
+        superUser:
+          usernameSecret:
+            name: compliance-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: compliance-postgres-db-superuser
+            key: password
+        username: oidc-identity-resolver
+        database: oidc-identity-resolver
+        schema: oidc-identity-resolver
+        host:
+          name: compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local
+          port: 5432
+
+  - name: profile
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: profile
+    sourceRef: 1.1.3
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      service:
+        port: 80
+      http:
+        port: 8083
+      postgres:
+        superUser:
+          usernameSecret:
+            name: compliance-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: compliance-postgres-db-superuser
+            key: password
+        username: profile
+        database: profile
+        schema: profile
+        host:
+          name: compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local
+          port: 5432
+      config:
+        QUARKUS_LOG_LEVEL: DEBUG
+        QUARKUS_DATASOURCE_REACTIVE_URL: postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/profile
+        FLYWAY_JDBC_URL: jdbc:postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/profile
+        QUARKUS_OPENTELEMETRY_TRACER_EXPORTER_OTLP_ENDPOINT: http://otel-collector-opentelemetry-collector.gxfs-compliance.svc.cluster.local:4317
+      profiles:
+        config:
+          application.yaml: |
+            gaia-x:
+                profile:
+                    config:
+                      - name: GXFS-LegalInformation
+                        aip: "1.0"
+                        id: gxfs-legal-information
+                        description: This credential represents a GXFS Legalinformation Definition
+                        valid-for: P1Y
+                        task-descriptions: >
+                          []
+                        tasks: >
+                          {}
+                        precondition-tasks: >
+                          {}
+                        template: >
+                          {
+                              "attributes": [
+                                      "legalName",
+                                      "legalForm",
+                                      "registrationNumber",
+                                      "headquarterAdress",
+                                      "vatNumber",
+                                      "registrationDate",
+                                      "SME",
+                                      "managingDirector",
+                                      "mainContact",
+                                      "dataProtectionOfficer",
+                                      "description"
+                              ]
+                          }
+  - name: request-processing
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: request-processing
+    sourceRef: 1.1.3
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      config:
+        BROWSER_IDENTIFICATION_URL: http://oidc-identity-resolver.gxfs-compliance.svc.cluster.local:8080/session/
+        FLYWAY_JDBC_URL: jdbc:postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/request-processing
+        NOTARIZATION_PROCESSING_INTERNAL_URL: http://request-processing:80
+        QUARKUS_DATASOURCE_REACTIVE_URL: postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/request-processing
+        QUARKUS_DATASOURCE_USERNAME: request-processing
+        QUARKUS_HTTP_ACCESS_LOG_ENABLED: "true"
+        QUARKUS_LOG_LEVEL: DEBUG
+        QUARKUS_OIDC_AUTH_SERVER_URL: https://sso-integration.gxfs.dev/realms/notarization
+        QUARKUS_OIDC_DISCOVERY_ENABLED: "false"
+        QUARKUS_OIDC_INTROSPECTION_PATH: https://sso-integration.gxfs.dev/realms/notarization/protocol/openid-connect/token/introspect
+        QUARKUS_OPENTELEMETRY_TRACER_EXPORTER_OTLP_ENDPOINT: http://otel-collector-opentelemetry-collector.gxfs-compliance.svc.cluster.local:4317
+        QUARKUS_REST_CLIENT_DSS_API_URL: http://dss.gxfs-compliance.svc.cluster.local:8080/services/rest
+        QUARKUS_REST_CLIENT_PROFILE_API_URL: http://profile:80
+        QUARKUS_REST_CLIENT_REQUESTPROCESSING_API_URL: http://request-processing:80
+        QUARKUS_REST_CLIENT_REVOCATION_API_URL: http://revocation:80
+        QUARKUS_REST_CLIENT_SSI_ISSUANCE_API_URL: http://ssi-issuance-controller:80/
+        RABBITMQ_HOST: rabbitmq.gxfs-compliance.svc.cluster.local
+        RABBITMQ_PORT: "5672"
+        RABBITMQ_USERNAME: user
+      postgres:
+        superUser:
+          usernameSecret:
+            name: compliance-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: compliance-postgres-db-superuser
+            key: password
+        username: request-processing
+        database: request-processing
+        schema: request-processing
+        host:
+          name: compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local
+          port: 5432
+      oidc:
+        credentialsSecretName: rabbitmq
+        credentialsSecretKey: rabbitmq-password
+      http:
+        port: 8084
+      service:
+        port: 80
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/request-processing(/|$)(.*)
+                port: 80
+
+  - name: revocation
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: revocation
+    sourceRef: 1.1.1
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      config:
+        QUARKUS_LOG_LEVEL: DEBUG
+        REVOCATION_BASE_URL: https://revocation
+        QUARKUS_OPENTELEMETRY_TRACER_EXPORTER_OTLP_ENDPOINT: http://otel-collector-opentelemetry-collector.gxfs-compliance.svc.cluster.local:4317
+      postgres:
+        superUser:
+          usernameSecret:
+            name: compliance-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: compliance-postgres-db-superuser
+            key: password
+        username: revocation
+        database: revocation
+        schema: revocation
+        host:
+          name: compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local
+          port: 5432
+      http:
+        port: 8086
+      service:
+        port: 80
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/revocation(/|$)(.*)
+                port: 80
+
+  - name: scheduler
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: scheduler
+    sourceRef: 1.1.1
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      config:
+        QUARKUS_OPENTELEMETRY_TRACER_EXPORTER_OTLP_ENDPOINT: http://otel-collector-opentelemetry-collector.gxfs-compliance.svc.cluster.local:4317
+        CRON_ISSUE_REVOCATION_CREDENTIALS: 0 * * ? * * *
+        CRON_PRUNE_SUBMISSION_TIMEOUT: "*/2 * * ? * * *"
+        CRON_PRUNE_TERMINATED: "*/10 * * ? * * *"
+        CRON_PRUNE_TIMEOUT: "*/5 * * ? * * *"
+        QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local:5432/scheduler
+        QUARKUS_DATASOURCE_USERNAME: scheduler
+        QUARKUS_HTTP_ACCESS_LOG_ENABLED: "true"
+        QUARKUS_LOG_LEVEL: DEBUG
+        QUARKUS_REST_CLIENT_PROFILE_API_URL: http://profile.gxfs-compliance.svc.cluster.local:80
+        QUARKUS_REST_CLIENT_REQUESTPROCESSING_API_URL: http://request-processing.gxfs-compliance.svc.cluster.local:80
+        QUARKUS_REST_CLIENT_REVOCATION_API_URL: http://revocation.gxfs-compliance.svc.cluster.local:80
+        QUARKUS_REST_CLIENT_SSI_ISSUANCE_API_URL: http://ssi-issuance-controller.gxfs-compliance.svc.cluster.local:80/
+      postgres:
+        superUser:
+          usernameSecret:
+            name: compliance-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: compliance-postgres-db-superuser
+            key: password
+        username: scheduler
+        database: scheduler
+        schema: scheduler
+        host:
+          name: compliance-postgres-db-rw.gxfs-compliance.svc.cluster.local
+          port: 5432
+
+  - name: ssi-issuance-controller
+    namespace: gxfs-compliance
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/not/helm
+    chartName: ssi-issuance-controller
+    sourceRef: 1.1.1
+    values:
+      service:
+        port: 80
+        debugPort: 9229

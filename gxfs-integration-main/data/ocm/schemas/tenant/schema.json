@@ -1,0 +1,11 @@
+{
+    "name": "GXFS-Tenant-Credential-Integration-1.0",
+    "createdBy": "Author",
+    "version": "1.0.0",
+    "attributes": [
+      "tenantId",
+      "token",
+      "expires"
+    ]
+  }
+  

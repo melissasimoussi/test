@@ -1,0 +1,32 @@
+replicas: 1
+
+worker:
+  # -- worker replicas
+  replicas: 1
+
+authentik:
+  secret_key: "ahchael2thuthee0uchoo3aequaephoweecoof5ooVuuko3coh"
+  error_reporting:
+      enabled: false
+  disable_startup_analytics: true
+  postgresql:
+    host: 'authentik-postgres-rw.idm.svc.cluster.local'
+    name: app
+    user: ""
+    password: ""
+env:
+  AUTHENTIK_POSTGRESQL__USE_PGBOUNCER: false
+  AUTHENTIK_FOOTER_LINKS: [{"name": "GXFS-Workshop","href":"https://example.com"}]
+  AUTHENTIK_GDPR_COMPLIANCE: true
+envValueFrom:
+  AUTHENTIK_POSTGRESQL__USER:
+    secretKeyRef:
+      key: username
+      name: authentik-postgres-app
+  AUTHENTIK_POSTGRESQL__PASSWORD:
+    secretKeyRef:
+      key: password
+      name: authentik-postgres-app
+
+redis:
+  enabled: true

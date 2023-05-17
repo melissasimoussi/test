@@ -1,0 +1,25 @@
+{{- if .Values.redis }}
+{{- range $redis := .Values.redis }}
+{{- if .enabled }}
+{{- if .externalConfig }}
+{{- if eq .externalConfig.enabled true }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .name }}-ext-config
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/instance: {{ .name }}
+    app.kubernetes.io/version: {{ $.Chart.AppVersion }}
+    app.kubernetes.io/component: middleware
+data:
+  redis-external.conf: |
+    {{ .externalConfig.data | nindent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

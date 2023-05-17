@@ -1,0 +1,801 @@
+source: https://gitlab.com/gaia-x/data-infrastructure-federation-services/gxfs-integration.git
+sourceRef: main
+project: gxfs-idm
+
+applications:
+  - name: aas
+    namespace: aas
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/33486554/packages/helm/Integration
+    chartName: aas
+    sourceRef: 1.0.9
+    values:
+      config:
+        profile: prod
+      ingress:
+        enabled: true
+        hosts:
+          - host: aas-integration.gxfs.dev
+            paths:
+              - path: /
+                port: 9000
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - aas-integration.gxfs.dev
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/ssl-redirect: "false"
+          nginx.ingress.kubernetes.io/affinity: cookie
+          nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+          nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+        tlsEnabled: true
+        pathOverride: ""
+      image:
+        tag: "integration-759250204"
+      server:
+        http:
+          port: 9000
+      properties:
+        aas:
+          oidc:
+            issuer: https://aas-integration.gxfs.dev
+            static-scopes: []
+          token:
+            ttl: 60m
+          tsa:
+            url: http://policy.tsa.svc.cluster.local:8080
+            delay: 5000 # in milliseconds
+            duration: 300000 # in milliseconds
+            version: "1.0"
+            action: evaluation
+            group: policies
+          iam:
+            base-uri: https://aas-integration.gxfs.dev
+            clients:
+              gxfs-portal:
+                id: gxfs-portal
+                redirect-uri:
+                  - https://integration.gxfs.dev/
+                  - http://127.0.0.1:3000/
+                  - http://127.0.0.1:3000/token
+              tsystems-gaiax-aas:
+                id: tsystems-gaiax-aas
+                redirect-uri:
+                  - https://auth.servicemeister.research.ai.usu.com/auth/realms/usu/broker/t-systems-gaiax-aas/endpoint
+              demo-portal:
+                id: demo-portal
+                secret: "{noop}demo-portal"
+                redirect-uri: 
+                  - https://fc-demo-server.gxfs.dev
+                  - https://fc-server.gxfs.dev
+                  - http://78.138.66.181:8088/login/oauth2/code/fc-client-oidc
+            iat:
+              dcr-uri: https://key-server.gxfs.dev/realms/gaia-x/clients-registrations/openid-connect
+              redirect-uri: ${aas.oidc.issuer}/*
+              secret: "{noop}iat"
+            jwk:
+              length: 3072
+              secret: 96ec048e-c640-4cfd-bc82-6571810a9d0f
+            scopes:
+              openid:
+                - sub
+                - iss
+                - auth_time
+              profile:
+                - name
+                - given_name
+                - family_name
+                - middle_name
+                - preferred_username
+                - gender
+                - birthdate
+                - updated_at
+              email:
+                - email
+                - email_verified
+        logging:
+          level:
+            root: INFO
+            tsclaims: DEBUG
+            org.springframework.web: DEBUG
+            org.springframework.security: DEBUG
+            eu.gaiax.difs.aas: DEBUG
+  - name: tsa-did
+    namespace: tsa
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/tsa/helm
+    chartName: did
+    sourceRef: 1.0.1
+    resources:
+      requests:
+        cpu: 150m
+        memory: 3096Mi
+      limits:
+        cpu: 150m
+        memory: 3096Mi
+    images:
+      uniResolverDriverDidUport: uport/uni-resolver-driver-did-uport:latest
+      indyDidDriver: ghcr.io/idunion/indy-did-resolver/indy-did-driver:latest
+      driverDidKey: universalresolver/driver-did-key:latest
+      didResolver: universalresolver/uni-resolver-web:latest
+
+  - name: mediator
+    namespace: ocm
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/43057238/packages/helm/Integration
+    chartName: mediator
+    sourceRef: 0.1.6
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: infrastructure
+        tag: "v0.0.7"
+        pullPolicy: Always
+      ingress:
+        enabled: false
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        hosts:
+          - host: https://integration.gxfs.dev/
+            paths:
+              - path: mediator(/|$)(.*)
+                port: 3000
+        tlsEnabled: true
+        frontendDomain: integration.gxfs.dev
+        frontendTlsSecretName: argocd-wildcard
+        pathOverride: mediator
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-mediator
+        username: ocm-mediator
+        schema: DatabasePerWallet
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      mediator:
+        endpoint:
+          url: https://integration.gxfs.dev/mediator
+
+  - name: caddy
+    namespace: ocm
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/43678280/packages/helm/Integration
+    chartName: caddy
+    sourceRef: 0.0.3
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: caddy
+        tag: "v0.0.2"
+        pullPolicy: Always
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tlsEnabled: true
+        frontendDomain: integration.gxfs.dev
+        frontendTlsSecretName: argocd-wildcard
+
+  - name: connection-manager
+    namespace: ocm
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/ocm/helm
+    chartName: connection-manager
+    sourceRef: 1.0.5
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: connection-manager
+        tag: "v1.0.2-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: false
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-connection-manager
+        username: ocm-connection-manager
+        schema: attestation
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      connectionManager:
+        nats:
+          url: nats-cluster.default.svc.cluster.local
+          port: 4222
+          protocol: nats
+
+  - name: tsa-mongodb
+    namespace: tsa
+    enabled: true
+    sourcePath: manifests/mongodb
+    values:
+      fullnameOverride: tsa-mongodb
+      ignoreHelmHooks: true
+      mongodb:
+        members: 3
+        version: "4.4.15"
+        size: 5Gi
+        storageClass: cinder-default
+        password: hunkeponk-mongo
+        dbName: admin
+
+  - name: ocm-postgres
+    namespace: ocm
+    enabled: true
+    sourcePath: manifests/postgres
+    values:
+      fullnameOverride: ocm-postgres
+      ignoreHelmHooks: true
+      postgres:
+        - name: ocm-postgres
+          enabled: true
+          instances: 3
+          storage:
+            size: 2Gi
+            storageClass: cinder-default
+          pooler:
+            - enabled: true
+              type: rw
+              instances: 3
+              pgbouncer:
+                poolMode: session
+                authQuerySecret:
+                  name: integratio-db-superuser
+                authQuery: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
+
+  - name: tsa-redis
+    namespace: tsa
+    enabled: true
+    sourcePath: manifests/redis
+    values:
+      ingress:
+        enabled: false
+      redis:
+        - name: tsa-redis
+          enabled: true
+          clusterSize: 3
+          image: quay.io/opstree/redis
+          persistenceEnabled: true
+          redisSecret:
+            secretName: tsa-redis-secret
+            secretKey: password
+          tag: v7.0.5
+          leader:
+            replicas: 3
+          follower:
+            replicas: 3
+          pdb:
+            enabled: true
+            minAvailable: 1
+          storageSpec:
+            volumeClaimTemplate:
+              spec:
+                storageClassName: cinder-default
+                accessModes: ["ReadWriteOnce"]
+                resources:
+                  requests:
+                    storage: 1Gi
+
+  - name: cache
+    namespace: tsa
+    enabled: true
+    source:  https://gitlab.com/api/v4/projects/37104906/packages/helm/Integration
+    chartName: cache
+    sourceRef: 1.0.5
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      ingress:
+        enabled: false
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/tsa
+        name: cache
+        tag: "redis-cluster-fix"
+        pullPolicy: Always
+      cache:
+        http:
+          host: ""
+          port: 8080
+          timeout:
+            idle: 120s
+            read: 10s
+            write: 10s
+        nats:
+          url: nats-cluster.default.svc.cluster.local:4222
+          subject: external_cache_events
+      redis:
+        superUser:
+          passwordSecret:
+            name: tsa-redis-secret
+            key: password
+        database: 0
+        username: default
+        passwordSecret:
+          name: tsa-redis-secret
+          key: password
+        addr: tsa-redis-leader.tsa.svc.cluster.local:6379
+        isCluster: 'true'
+        host:
+          name: tsa-redis-leader.tsa.svc.cluster.local
+          port: 6379
+
+  - name: signer
+    namespace: tsa
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/tsa/helm
+    chartName: signer
+    sourceRef: 1.0.8
+    values:
+      ingress:
+        enabled: false
+      signer:
+        vault:
+          addr: http://vault.vault.svc.cluster.local:8200
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/tsa
+        name: signer
+        tag: "v1.0.7"
+        pullPolicy: IfNotPresent
+
+  - name: infohub
+    namespace: tsa
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/tsa/helm
+    chartName: infohub
+    sourceRef: 1.1.12
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/tsa
+        name: infohub
+        tag: "v1.0.1-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/infohub(/|$)(.*)
+                port: 8080
+        tlsEnabled: true
+        frontendDomain: integration.gxfs.dev
+        frontendTlsSecretName: argocd-wildcard
+        pathOverride: infohub
+      mongodb:
+        superUser:
+          username: admin
+          passwordSecret:
+            name: tsa-mongodb
+            key: password
+        database: tsa-infohub
+        username: tsa-infohub
+        authenticationMechanism: SCRAM-SHA-256
+        addr: mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/tsa-infohub?replicaSet=tsa-mongodb-mongodb&authSource=admin
+        uri: mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/admin?replicaSet=tsa-mongodb-mongodb
+      adresses:
+        cache: http://cache.tsa.svc.cluster.local:8080
+        policy: http://policy.tsa.svc.cluster.local:8080
+        signer: http://signer.tsa.svc.cluster.local:8080
+
+  - name: policy
+    namespace: tsa
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/tsa/helm
+    chartName: policy
+    sourceRef: 1.0.4
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    syncPolicy:
+      syncOptions:
+      - RespectIgnoreDifferences=true
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/tsa
+        name: policy
+        tag: "provide-proof-manager-address-to-OCM-client"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: false
+      mongodb:
+        superUser:
+          usernameSecret:
+          username: admin
+          passwordSecret:
+            name: tsa-mongodb
+            key: password
+        database: tsa-policy
+        username: tsa-policy
+        addr: mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/tsa-policy?replicaSet=tsa-mongodb-mongodb&authSource=admin
+        uri: mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/admin?replicaSet=tsa-mongodb-mongodb
+      addresses:
+        cache: http://cache.tsa.svc.cluster.local:8080
+        task: http://task-svc.tsa.svc.cluster.local:8080
+        didResolver: http://didresolver.tsa.svc.cluster.local:8080
+        signer: http://signer.tsa.svc.cluster.local:8080
+        ocm: http://proof-manager.ocm.svc.cluster.local:3007
+
+  - name: task
+    namespace: tsa
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/tsa/helm
+    chartName: task
+    sourceRef: 1.0.4
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/tsa
+        name: task
+        tag: "v1.0.1-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: false
+      mongodb:
+        superUser:
+          usernameSecret:
+          username: admin
+          passwordSecret:
+            name: tsa-mongodb
+            key: password
+        database: task
+        username: task
+        addr: mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/task?replicaSet=tsa-mongodb-mongodb&authSource=admin
+        uri: mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/admin?replicaSet=tsa-mongodb-mongodb
+      adresses:
+        cache: http://cache.tsa.svc.cluster.local:8080
+        policy: http://policy.tsa.svc.cluster.local:8080
+
+  - name: attestation-manager
+    namespace: ocm
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/ocm/helm
+    chartName: attestation-manager
+    sourceRef: 1.0.5
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    syncPolicy:
+      syncOptions:
+      - RespectIgnoreDifferences=true
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: attestation-manager
+        tag: "v1.0.3-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: false
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-attestationmanager
+        username: ocm-attestationmanager
+        schema: attestation
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      attestationManager:
+        nats:
+          url: nats-cluster.default.svc.cluster.local
+          port: 4222
+          protocol: nats
+        agent:
+          protocol: http
+          host: ssi-abstraction.ocm.svc.cluster.local
+          port: 3010
+        url:
+          attestationManager: http://attestation-manager.ocm.svc.cluster.local:3005
+          connectionManager: http://connection-manager.ocm.svc.cluster.local:3003
+          tsa: http://policy.tsa.svc.cluster.local:8080
+
+  - name: notification-manager
+    namespace: ocm
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/ocm/helm
+    chartName: notification-manager
+    sourceRef: 1.0.4
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: notification-manager
+        tag: "v1.0.1-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: false
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-notificationmanager
+        username: ocm-notificationmanager
+        schema: notification
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      notificationManager:
+        nats:
+          url: nats-cluster.default.svc.cluster.local
+          port: 4222
+          protocol: nats
+
+  - name: principal-manager
+    namespace: ocm
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/ocm/helm
+    chartName: principal-manager
+    sourceRef: 1.0.2
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: principal-manager
+        tag: "v1.0.1-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: false
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-principalmanager
+        username: ocm-principalmanager
+        schema: principalmanager
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      principalManager:
+        nats:
+          url: nats-cluster.default.svc.cluster.local
+          port: 4222
+          protocol: nats
+        url:
+          attestationManager: http://attestation-manager.ocm.svc.cluster.local:3005
+          connectionManager: http://connection-manager.ocm.svc.cluster.local:3003
+
+  - name: proof-manager
+    namespace: ocm
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/36587833/packages/helm/Integration
+    chartName: proof-manager
+    sourceRef: 1.0.3
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    syncPolicy:
+      syncOptions:
+      - RespectIgnoreDifferences=true
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: proof-manager
+        tag: "presentationMessageFix-2"
+        pullPolicy: Always
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /ocm/proof/v1/url/
+                port: 8080
+        tlsEnabled: true
+        frontendDomain: integration.gxfs.dev
+        frontendTlsSecretName: argocd-wildcard
+        pathOverride: proof-manager
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-proofmanager
+        username: ocm-proofmanager
+        schema: proofmanager
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      proofManager:
+        proofManagerUrl: https://integration.gxfs.dev/proof
+        acceptPresentationConfig: AUTO
+        useAuth: 'false'
+        agent:
+          host: ssi-abstraction.ocm.svc.cluster.local
+          protocol: http
+          port: 3010
+        nats:
+          url: nats-cluster.default.svc.cluster.local
+          port: 4222
+          protocol: nats
+
+  - name: ssi-abstraction
+    namespace: ocm
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/36299513/packages/helm/Integration
+    chartName: ssi-abstraction
+    sourceRef: 1.0.6
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    syncPolicy:
+      syncOptions:
+      - RespectIgnoreDifferences=true
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/ocm
+        name: ssi-abstraction
+        tag: "v1.0.3-rc"
+        pullPolicy: IfNotPresent
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /ocm/didcomm(/|$)(.*)
+                port: 443
+        tlsEnabled: true
+        frontendDomain: integration.gxfs.dev
+        frontendTlsSecretName: argocd-wildcard
+        pathOverride: didcomm
+      postgres:
+        superUser:
+          usernameSecret:
+            name: ocm-postgres-superuser
+            key: username
+          passwordSecret:
+            name: ocm-postgres-superuser
+            key: password
+        database: ocm-ssiabstraction
+        username: ocm-ssiabstraction
+        schema: ssiabstraction
+        host:
+          name: ocm-postgres-rw.ocm.svc.cluster.local
+          port: 5432
+      ssiAbstraction:
+        agent:
+          name: GXFS-Integration
+          host: integration.gxfs.dev
+          protocol: https
+          peerPort: 443
+          urlPath: /ocm/didcomm
+          publicDidSeed: seed
+          autoAccept:
+            connection: true
+            credential: true
+          wallet:
+            key: ssi-wallet-key
+            id: ssi-wallet-id
+          ledgerId: ID_UNION
+        nats:
+          url: nats-cluster.default.svc.cluster.local
+          port: 4222
+          protocol: nats
+
+  - name: tsa-policy-sync
+    namespace: tsa
+    enabled: true
+    sourcePath: helm/charts/tsa-policy-sync
+    ignoreDifferences:
+    - group: ""
+      kind: "Secret"
+      jsonPointers:
+      - /data
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/tsa/policy
+        name: sync:integration
+        pullPolicy: Always
+      sync:
+        DB_ADDR: "mongodb://tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/tsa-policy?replicaSet=tsa-mongodb-mongodb&authSource=admin"
+        DB_USER: "tsa-policy"
+        DB_PASS: "policy-tsa"
+        DB_PASS_KEY: "mongodb-password"
+        POLICY_REPO: "https://gitlab.com/gaia-x/data-infrastructure-federation-services/gxfs-integration"
+        POLICY_REPO_FOLDER: "data/tsa/policies"
+        POLICY_REPO_BRANCH: "main"
+        KEEP_ALIVE: "'true'"
+        DB_NAME: "tsa-policy"
+
+  - name: workshop-ingress
+    enabled: true
+    sourcePath: manifests/workshop
+    values:
+      ignoreHelmHooks: true
+
+  - name: workshop-tsa
+    namespace: tsa
+    enabled: false
+    source: https://gitlab.com/api/v4/projects/44174035/packages/helm/Integration
+    chartName: policy-management-service
+    sourceRef: 1.0.1
+    values:
+      ingress:
+        enabled: true
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/workshop/tsa(/|$)(.*)
+                port: 3000
+        tlsEnabled: true
+        frontendDomain: integration.gxfs.dev
+        frontendTlsSecretName: argocd-wildcard
+        pathOverride: policy-management-service
+      config:
+        DB_ADDR: "tsa-mongodb-mongodb-0.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-1.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017,tsa-mongodb-mongodb-2.tsa-mongodb-mongodb-svc.tsa.svc.cluster.local:27017/tsa-policy?replicaSet=tsa-mongodb-mongodb&authSource=admin"
+        DB_USER: "tsa-policy"
+        DB_PASS: "policy-tsa"
+        DB_PASS_KEY: "mongodb-password"
+        DB_NAME: "tsa-policy"	
+        DB_AUTH: "DEFAULT"

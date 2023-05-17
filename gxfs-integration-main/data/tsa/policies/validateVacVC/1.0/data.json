@@ -1,0 +1,19 @@
+{
+  "trustlist": [
+    "did:key:z6MkpxjNepTaD1xo49dEbbW36FguWgsiToxNdhR8YJMnFQoJ",
+    "did:key:z6Mkfriq1MqLBoPWecGoDLjguo1sB9brj6wT3qZ5BxkKpuP6",
+    "did:key:z6Mkk7yqnGF3YwTrLpqrW6PGsKci7dNqh1CjnvMbzrMerSeL"
+  ],
+  "vaccines": {
+    "EU/1/20/1528": {
+      "active": true,
+      "medicinalProductName": "COVID-19 Vaccine Moderna",
+      "marketingAuthorizationHolder": "Moderna Biotech"
+    },
+    "EU/2/18/1678": {
+      "active": true,
+      "medicinalProductName": "Pfizer–BioNTech COVID-19 vaccine",
+      "marketingAuthorizationHolder": "Pfizer–BioNTech"
+    }
+  }
+}

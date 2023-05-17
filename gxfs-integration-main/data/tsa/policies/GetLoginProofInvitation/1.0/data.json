@@ -1,0 +1,7 @@
+{
+  "scopes": {
+    "profile": "principalMemberCredential",
+    "openid": "principalMemberCredential",
+    "email": "principalMemberCredential"
+  }
+}

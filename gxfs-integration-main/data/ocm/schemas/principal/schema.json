@@ -1,0 +1,18 @@
+{
+  "name": "GXFS-Principal-Credential-Integration-1.0",
+  "createdBy": "Author",
+  "version": "1.0.0",
+  "attributes": [
+    "FirstName",
+    "LastName",
+    "MiddleName",
+    "PreferredUsername",
+    "Gender",
+    "Birthdate",
+    "Email",
+    "FederationId",
+    "Claims",
+    "issuerDID",
+    "subjectDID"
+  ]
+}

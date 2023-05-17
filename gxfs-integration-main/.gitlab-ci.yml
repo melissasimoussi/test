@@ -1,0 +1,146 @@
+variables:
+  ARGOCD_BRANCH: "main"
+
+pages:
+  image:
+    name: alpine:3.16
+  stage: deploy
+  script:
+    - |
+      apk add curl yq
+      PORTAL_HELM_INDEX_FILE_URLS="https://gitlab.com/api/v4/projects/36066664/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/34153865/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/34153880/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/37196858/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/35515570/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/37754362/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/34153945/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/37315914/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/37724080/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/35540317/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/40594382/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/36925694/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/40829364/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/40594401/packages/helm/${CHANNEL}/index.yaml \
+                                   https://gitlab.com/api/v4/projects/37105891/packages/helm/${CHANNEL}/index.yaml"
+      PORTAL_DIRECTORY_NAME="por"
+
+      OCM_HELM_INDEX_FILE_URLS="https://gitlab.com/api/v4/projects/36587274/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/36587349/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37895969/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/36587782/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/36587833/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/36299513/packages/helm/${CHANNEL}/index.yaml"
+      OCM_DIRECTORY_NAME="ocm"
+
+      TSA_HELM_INDEX_FILE_URLS="https://gitlab.com/api/v4/projects/37104906/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37104982/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37203076/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37645072/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37105020/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37203134/packages/helm/${CHANNEL}/index.yaml \
+                                https://gitlab.com/api/v4/projects/37203246/packages/helm/${CHANNEL}/index.yaml"
+      TSA_DIRECTORY_NAME="tsa"
+
+      IDM_HELM_INDEX_FILE_URLS="https://gitlab.com/api/v4/projects/33486554/packages/helm/${CHANNEL}/index.yaml"
+      IDM_DIRECTORY_NAME="idm"
+
+      CAM_HELM_INDEX_FILE_URLS="https://gitlab.com/api/v4/projects/33217013/packages/helm/${CHANNEL}/index.yaml"
+      CAM_DIRECTORY_NAME="cam"
+
+      NOT_HELM_INDEX_FILE_URLS="https://gitlab.com/api/v4/projects/33394178/packages/helm/${CHANNEL}/index.yaml"
+      NOT_DIRECTORY_NAME="not"
+
+      merge_project_index_files () {
+        INDEX=1
+        for HELM_INDEX_FILE_URL in $1; do
+          echo "Downloading index file $INDEX from $HELM_INDEX_FILE_URL"
+          curl -s $HELM_INDEX_FILE_URL > merge_index$INDEX.yaml
+          INDEX=$((INDEX+1))
+        done
+
+        # Replace in each file "- charts/" with "- https://gitlab.com/api/v4/projects/<project id>/packages/helm/${CHANNEL}/charts/"
+        INDEX=1
+        for HELM_INDEX_FILE in merge_index*.yaml; do
+          PROJECT_ID=$(yq '.serverInfo.contextPath' $HELM_INDEX_FILE | cut -d'/' -f5)
+          PROJECT_URL="https://gitlab.com/api/v4/projects/$PROJECT_ID/packages/helm/${CHANNEL}/charts"
+
+          # Escape slashes
+          PROJECT_URL=$(echo $PROJECT_URL | sed 's/\//\\\//g')
+          echo "Replacing charts with $PROJECT_URL in $HELM_INDEX_FILE"
+          sed -i "s/- charts/- $PROJECT_URL/g" $HELM_INDEX_FILE
+          INDEX=$((INDEX+1))
+
+          cat $HELM_INDEX_FILE
+        done
+
+        # Generate index.yaml
+        > index.yaml
+        echo "apiVersion: v1" >> index.yaml
+        echo "entries:" >> index.yaml
+        INDEX=1
+        for HELM_INDEX_FILE in merge_index*.yaml; do
+          yq '.entries' $HELM_INDEX_FILE | sed 's/^/  /' >> index.yaml
+          INDEX=$((INDEX+1))
+        done
+        echo "generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> index.yaml
+
+        INDEX_FILE_DIR=./public/applications/$2/helm
+
+        mkdir -p $INDEX_FILE_DIR
+        mv index.yaml $INDEX_FILE_DIR
+
+        # Cleanup
+        rm merge_index*.yaml
+      }
+
+      merge_project_index_files "$PORTAL_HELM_INDEX_FILE_URLS" "$PORTAL_DIRECTORY_NAME"
+      merge_project_index_files "$OCM_HELM_INDEX_FILE_URLS" "$OCM_DIRECTORY_NAME"
+      merge_project_index_files "$TSA_HELM_INDEX_FILE_URLS" "$TSA_DIRECTORY_NAME"
+      merge_project_index_files "$CAM_HELM_INDEX_FILE_URLS" "$CAM_DIRECTORY_NAME"
+      merge_project_index_files "$IDM_HELM_INDEX_FILE_URLS" "$IDM_DIRECTORY_NAME"
+      merge_project_index_files "$NOT_HELM_INDEX_FILE_URLS" "$NOT_DIRECTORY_NAME"
+  artifacts:
+    paths:
+      - public
+    expire_in: 2 days
+  only:
+    variables:
+      - $CI_TASK == "merge-helm-index-files"
+
+set_app_image_version:
+  stage: deploy
+  image:
+    name: python:3.8
+  script:
+    - pip install ruamel.yaml==0.16.10
+    - git checkout $ARGOCD_BRANCH
+    - echo "$IMAGE"
+    - echo "$PROJECT"
+    - python3 ci_scripts/set-image.py "$IMAGE" "./clusters/integration/values/gxfs-${PROJECT}.yaml"
+    - git config --global user.email "gitlab-ci@localhost"
+    - git config --global user.name "GitLab CI"
+    - git add clusters/integration/values/*.yaml
+    - git commit -m "Set new image for project $PROJECT"
+    - git remote rm origin && git remote add origin git@gitlab.com:$CI_PROJECT_PATH.git
+    - git remote set-url --push origin "https://$CI_JOB_TOKEN_RW/$CI_PROJECT_PATH.git"
+    - git push origin $ARGOCD_BRANCH
+  only:
+    variables:
+      - $CI_PIPELINE_SOURCE == "pipeline"
+  needs:
+    - project: $DEPLOY_PROJECT
+      job: $DEPLOY_JOB
+      ref: $DEPLOY_REF
+      artifacts: true
+
+helm_package:
+  stage: deploy
+  image: dtzar/helm-kubectl:3.10.1
+  rules:
+    - if: $CI_TASK == "helm_package" && $CHANNEL && $CHART_PATH
+  script:
+    - helm dependency update ${CHART_PATH}
+    - helm package ${CHART_PATH} -d ${CHART_PATH}package/
+    - export FILE_NAME=$(ls ${CHART_PATH}package/*.tgz)
+    - 'curl --request POST --user gitlab-ci-token:$CI_JOB_TOKEN --form "chart=@${FILE_NAME}" "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/helm/api/${CHANNEL}/charts"'

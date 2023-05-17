@@ -1,0 +1,348 @@
+source: https://gitlab.com/gaia-x/data-infrastructure-federation-services/gxfs-integration.git
+sourceRef: main
+project: platform
+
+applications:
+
+- name: vault
+  namespace: vault
+  enabled: true
+  source: https://github.com/hashicorp/vault-helm.git
+  sourcePath: .
+  sourceRef: "v0.22.1"
+  values:
+    global:
+      tlsDisable: true
+    injector:
+      enabled: false
+      route:
+        enabled: true
+        host: '""'
+    server:
+      extraVolumes:
+        - type: secret
+          name: vault-tls
+      standalone:
+        config: |
+          ui = true
+          listener "tcp" {
+            tls_disable = true
+            address = "[::]:8200"
+            cluster_address = "[::]:8201"
+            tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+            tls_key_file  = "/vault/userconfig/vault-tls/tls.key"
+          }
+          storage "file" {
+            path = "/vault/data"
+          }
+      ingress:
+        enabled: false
+        ingressClassName: "nginx"
+        pathType: Prefix
+        hosts:
+          - host: vault-integration.gxfs.dev
+            paths:
+              - /
+        tls:
+        - secretName: argocd-wildcard
+          hosts:
+          - vault-integration.gxfs.dev
+
+- name: olm
+  namespace: olm
+  enabled: true
+  source: https://github.com/operator-framework/operator-lifecycle-manager.git
+  sourcePath: deploy/chart
+  sourceRef: v0.22.0
+  extraSyncOptions: 
+    - ServerSideApply=true
+  values:
+    namespace: olm
+    catalog_namespace: olm
+    olm:
+      image:
+          ref: quay.io/operator-framework/olm:v0.22.0
+    catalog:
+      image:
+        ref: quay.io/operator-framework/olm:v0.22.0
+    package:
+      image:
+        ref: quay.io/operator-framework/olm:v0.22.0
+
+- name: argocd
+  namespace: argocd
+  enabled: true
+  sourcePath: manifests/argocd
+  helmValues:
+    - ../../clusters/integration/values/config/gitops-config.yaml
+
+- name: keycloak
+  namespace: keycloak
+  enabled: true
+  sourcePath: manifests/keycloak
+  values:
+    name: integration-keycloak
+    ignoreHelmHooks: true
+    keycloak_cr:
+      instances: 1
+      db:
+        vendor: postgres
+        host: keycloak-integration-rw
+        port: 5432
+        database: app
+        usernameSecret:
+          name: keycloak-integration-app
+          key: username
+        passwordSecret:
+          name: keycloak-integration-app
+          key: password
+      hostname:
+        hostname: sso-integration.gxfs.dev
+    postgres:
+      - name: keycloak-integration
+        enabled: true
+        instances: 3
+        storage:  
+          size: 10Gi
+          storageClass: cinder-default
+        pooler:
+          - enabled: true
+            type: rw
+            instances: 3
+            pgbouncer:
+              poolMode: session
+              authQuerySecret:
+                name: keycloak-integration-superuser
+              authQuery: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
+    ingress:
+      hosts:
+        - host: "sso-integration.gxfs.dev"
+          paths:
+            - /
+      tls:
+        - secretName: keycloak-wildcard
+          hosts:
+            - "sso-integration.gxfs.dev"
+      annotations:
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"     
+    keycloakRealm:
+    - name: gxfs
+      id: gxfs
+      realm: gxfs
+      displayName: gxfs
+    - name: gxfs-compliance
+      id: gxfs-compliance
+      realm: gxfs-compliance
+      displayName: gxfs-compliance
+
+    keycloakClient:
+    - name: gxfs-compliance
+      clientId: gxfs-compliance
+      secret: "gxfs-compliance"
+
+- name: keycloak-realm-operator
+  namespace: keycloak
+  enabled: true
+  source: https://github.com/keycloak/keycloak-realm-operator.git
+  sourcePath: deploy
+  sourceRef: main
+  directory:
+    include: '{crds/*,role.yaml,role_binding.yaml,service_account.yaml,operator.yaml}'
+
+
+
+- name: postgres-operator
+  namespace: postgres-operator
+  enabled: true 
+  source: https://github.com/cloudnative-pg/charts.git
+  sourcePath: charts/cloudnative-pg
+  sourceRef: main
+  values:
+    enabled: true
+    crds:
+      create: true
+    image:
+      repository: ghcr.io/cloudnative-pg/cloudnative-pg-testing # switch when 1.18 is released
+      tag: main
+    replicaCount: 2
+
+- name: redis-operator
+  namespace: redis-operator
+  enabled: true
+  sourcePath: manifests/redis
+  values:
+    ignoreHelmHooks: true
+    operator:
+      enabled: true
+
+- name: mongodb-operator
+  namespace: mongodb-operator
+  enabled: true
+  source: https://mongodb.github.io/helm-charts
+  chartName: community-operator
+  sourceRef: 0.7.6
+  values: 
+    community-operator-crds:
+      enabled: true
+    operator:
+      watchNamespace: "*"
+
+- name: cert-manager
+  namespace: cert-manager
+  enabled: false
+  sourcePath: manifests/cert-manager
+  values:
+    cert-manager:
+      clusterIssuers:
+        letsencrypt:
+          enabled: true
+        acme:
+          solvers:
+            - http01:
+                ingress: {}
+
+- name: external-secrets
+  namespace: external-secrets
+  enabled: true
+  source: https://charts.external-secrets.io
+  chartName: external-secrets
+  sourceRef: 0.6.1
+  values: 
+    replicaCount: 2
+    leaderElect: true
+    podDisruptionBudget:
+      enabled: true
+      minAvailable: 1
+    webhook:
+      replicaCount: 2
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
+    certController:
+      replicaCount: 2
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
+
+- name: istio-operator
+  namespace: istio-operator
+  enabled: true
+  source: https://github.com/istio/istio.git
+  sourcePath: manifests/charts/istio-operator
+  sourceRef: 1.15.0
+  values:
+    hub: gcr.io/istio-release
+    tag: 1.15.0
+    watchedNamespaces: 'gxfs*,nats,vault,keycloak'
+    affinity:
+      podAntiAffinity:
+        # soft/true and hard, other than this disables affinity
+        enabled: hard
+        weight: 1
+        topologyKey: kubernetes.io/hostname
+        matchExpressions:
+          - key: name
+            operator: In
+            values:
+              - istio-operator
+
+- name: kiali-operator
+  namespace: kiali
+  enabled: true
+  source: https://kiali.org/helm-charts
+  sourceRef: 1.59.1
+  chartName: kiali-operator
+  values: 
+    name: integration-kiali
+    spec:
+      deployment:
+      accessible_namespaces:
+        - '**'
+
+# - name: nats
+#   namespace: nats
+#   enabled: true
+#   sourcePath: manifests/nats
+#   values:
+#     name: nats
+#     ignoreHelmHooks: true
+
+- name: nats-cluster
+  namespace: default
+  enabled: true
+  sources:
+    - ref: nats
+    - repoURL: https://nats-io.github.io/k8s/helm/charts/ 
+      sourceRef: 0.18.3
+      chartName: nats
+      helmValues:
+        - "$nats/clusters/integration/values/config/nats.yaml"
+
+- name: kong
+  namespace: kong
+  enabled: true
+  source: https://gitlab.com/api/v4/projects/40471958/packages/helm/Integration/
+  chartName: kong
+  sourceRef: 2.13.1
+  values:
+    migrations:
+      # Enable pre-upgrade migrations (run "kong migrations up")
+      preUpgrade: false
+      # Enable post-upgrade migrations (run "kong migrations finish")
+      postUpgrade: false
+    postgresql:
+      enabled: true
+      auth:
+        username: kong
+        database: kong
+        existingSecret: kong-secret
+      image:
+        # use postgres < 14 until is https://github.com/Kong/kong/issues/8533 resolved and released
+        # enterprise (kong-gateway) supports postgres 14
+        tag: 13.6.0-debian-10-r52
+      service:
+        ports:
+          postgresql: "5432"
+    env:
+      database: "postgres"
+    admin:
+      enabled: true
+      http:
+        enabled: true
+      tls: 
+        enabled: false
+    proxy:
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        hostname: integration.gxfs.dev
+        tls: argocd-wildcard
+        annotations: 
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        path: /api/dynamic(/|$)(.*)
+        pathType: ImplementationSpecific
+      tls:
+        enabled: false
+
+- name: pgadmin4
+  namespace: gxfs-portal
+  enabled: true
+  source: https://helm.runix.net/
+  chartName: pgadmin4
+  sourceRef: 1.13.8
+  values:
+    ingress:
+      ingressClassName: nginx
+      enabled: false
+      annotations:
+      hosts:
+      - host: pgadmin-integration.gxfs.dev
+        paths:
+        - path: /
+          port: 80
+          pathType: Prefix
+      tls:
+      - secretName: argocd-wildcard
+        hosts:
+        - pgadmin-integration.gxfs.dev
+

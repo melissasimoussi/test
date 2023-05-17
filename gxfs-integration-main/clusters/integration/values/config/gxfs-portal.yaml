@@ -1,0 +1,6 @@
+image:
+  repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/por/portal-integration
+  name: portal-integration
+  tag: "749581724"
+ingress:
+  enabled: false

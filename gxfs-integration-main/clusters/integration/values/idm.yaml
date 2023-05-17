@@ -1,0 +1,23 @@
+source: https://github.com/syself/gxfs-workshop.git
+sourceRef: main
+namespace: argocd
+project: idm
+
+applications:
+- name: authentik-postgres
+  namespace: idm
+  enabled: true
+  sourcePath: manifests/postgres
+  helmValues:
+      - ../../clusters/testing/values/config/authentik-postgres.yaml
+
+- name: authentik
+  namespace: idm
+  enabled: true
+  sources:
+    - ref: authentik
+    - repoURL: https://charts.goauthentik.io/
+      sourceRef: 2023.3.1
+      chartName: authentik
+      helmValues:
+        - "$authentik/clusters/testing/values/config/authentik.yaml"

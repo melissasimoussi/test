@@ -1,0 +1,28 @@
+{{- if hasKey .Values "keycloakClient" }}
+{{- range $kc := .Values.keycloakClient }}
+---
+apiVersion: "legacy.k8s.keycloak.org/v1alpha1"
+kind: "KeycloakClient"
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-options: "SkipDryRunOnMissingResource=true"
+  name: {{ .name | quote }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app: {{ $.Values.name }}
+spec:
+  realmSelector:
+    matchLabels:
+      app: {{ $.Values.name }}
+  client:
+    clientId: "{{ .clientId }}"
+    secret: "{{ .secret }}"
+    clientAuthenticatorType: "client-secret"
+    standardFlowEnabled: true
+    redirectUris:
+      {{- toYaml .redirectUris | nindent 6}}
+    defaultClientScopes:
+      - "email"
+      - "profile"
+{{- end }}
+{{- end }}

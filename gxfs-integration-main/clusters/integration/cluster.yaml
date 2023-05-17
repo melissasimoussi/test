@@ -1,0 +1,120 @@
+# Tell ArgoCD what to deploy in the cluster
+source: https://gitlab.com/gaia-x/data-infrastructure-federation-services/gxfs-integration.git
+sourceRef: main
+namespace: argocd
+
+applications:
+  - name: app-of-apps
+    project: cluster
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/cluster.yaml
+
+  - name: platform-apps
+    project: platform
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/values/platform.yaml
+
+  - name: gxfs-portal
+    project: gxfs-portal
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/values/gxfs-portal.yaml
+
+  - name: gxfs-idm
+    project: gxfs-idm
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/values/gxfs-idm.yaml
+
+  - name: gxfs-idm-provider
+    project: gxfs-idm-provider
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/values/gxfs-idm-provider.yaml
+
+  - name: gxfs-idm-provider2
+    project: gxfs-idm-provider2
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/values/gxfs-idm-provider2.yaml
+
+  - name: gxfs-compliance
+    project: gxfs-compliance
+    enabled: true
+    sourcePath: argocd
+    helmValues:
+      - ../clusters/integration/values/gxfs-compliance.yaml
+
+projects:
+  - name: cluster
+    enabled: true
+    destinations:
+      - namespace: "*"
+        server: "*"
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+  - name: platform
+    enabled: true
+    destinations:
+      - namespace: "*"
+        server: "*"
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+  - name: gxfs-portal
+    enabled: true
+    destinations:
+      - namespace: "*"
+        server: "*"
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+  - name: gxfs-idm
+    enabled: true
+    destinations:
+      - namespace: "*"
+        server: "*"
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+  - name: gxfs-compliance
+    enabled: true
+    destinations:
+      - namespace: "*"
+        server: "*"
+    clusterResourceWhitelist:
+      - group: "*"
+        kind: "*"
+  # - name: gxfs-compliance
+  #   enabled: true
+  #   destinations:
+  #   - namespace: '*'
+  #     server: '*'
+  #   clusterResourceWhitelist:
+  #   - group: '*'
+  #     kind: '*'
+  # - name: gxfs-contracting
+  #   enabled: true
+  #   destinations:
+  #   - namespace: '*'
+  #     server: '*'
+  #   clusterResourceWhitelist:
+  #   - group: '*'
+  #     kind: '*'
+  # - name: gxfs-catalog
+  #   enabled: true
+  #   destinations:
+  #   - namespace: '*'
+  #     server: '*'
+  #   clusterResourceWhitelist:
+  #   - group: '*'
+  #     kind: '*'

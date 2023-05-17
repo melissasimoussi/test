@@ -1,0 +1,11 @@
+apiVersion: v2
+description: |
+  This chart installs and configures:
+  * ArgoCD
+name: argocd
+version: "0"
+dependencies:
+  - name: "argo-cd"
+    version: "5.14.1"
+    repository: "https://argoproj.github.io/argo-helm"
+    alias: argocd

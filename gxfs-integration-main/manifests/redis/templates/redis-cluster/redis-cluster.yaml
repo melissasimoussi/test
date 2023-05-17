@@ -1,0 +1,112 @@
+{{- if .Values.redis }}
+{{- range $redis := .Values.redis }}
+{{- if .enabled }}
+---
+apiVersion: redis.redis.opstreelabs.in/v1beta1
+kind: RedisCluster
+metadata:
+  name: {{ .name }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version | replace "+" "_" }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+    app.kubernetes.io/instance: {{ .name }}
+    app.kubernetes.io/version: {{ $.Chart.AppVersion }}
+    app.kubernetes.io/component: middleware
+{{- if .labels }}
+{{- range $labelkey, $labelvalue := .labels }}
+    {{ $labelkey}}: {{ $labelvalue }}
+{{- end }}
+{{- end }}
+spec:
+  clusterSize: {{ .clusterSize | default 3 }}
+  persistenceEnabled: {{ .persistenceEnabled | default "false" }}
+  clusterVersion: {{ .clusterVersion | default "v7" }}
+  redisLeader:
+{{- if .leader }}
+{{- if .leader.affinity }}
+    affinity: {{ toYaml .leader.affinity | nindent 6 }}
+{{- end }}
+    replicas: {{ .leader.replicas }}
+{{- end }}
+{{- if .externalConfig }}
+{{- if eq .externalConfig.enabled true }}
+    redisConfig:
+      additionalRedisConfig: {{ .name }}-ext-config
+{{- end }}
+{{- if eq .externalConfig.enabled true }}
+    redisConfig:
+      additionalRedisConfig: {{ .name }}-ext-config
+{{- end }}
+{{- end }}
+{{- if .pdb }}
+{{- if eq .pdb.enabled true }}
+    pdb:
+      enabled: {{ .pdb.enabled }}
+      maxUnavailable: {{ .pdb.maxUnavailable }}
+      minAvailable: {{ .pdb.minAvailable }}
+{{- end }}
+{{- end }}
+{{- if .follower }}
+  redisFollower:
+    replicas: {{ .follower.replicas }}
+{{- if eq .pdb.enabled true }}
+    pdb:
+      enabled: {{ .pdb.enabled }}
+      maxUnavailable: {{ .pdb.maxUnavailable }}
+      minAvailable: {{ .pdb.minAvailable }}
+{{- end }}
+{{- if .follower.affinity }}
+    affinity: {{ toYaml .follower.affinity | nindent 6 }}
+{{- end }}
+{{- end }}
+{{- if .redisExporter }}
+  redisExporter:
+    enabled: {{ .redisExporter.enabled }}
+    image: "{{ .redisExporter.image }}:{{ .redisExporter.tag }}"
+    imagePullPolicy: "{{ .redisExporter.imagePullPolicy }}"
+    resources:
+{{ toYaml .redisExporter.resources | indent 6 }}
+{{- end }}
+  kubernetesConfig:
+    image: "{{ .image }}:{{ .tag }}"
+    imagePullPolicy: "{{ .imagePullPolicy | default "Always" }}"
+{{- if .resources }}
+    resources:
+{{ toYaml .resources | indent 6 }}
+{{- end }}
+{{- if .redisSecret }}
+    redisSecret:
+      name: "{{ .redisSecret.secretName }}"
+      key: "{{ .redisSecret.secretKey }}"
+{{- end }}
+{{- if .storageSpec }}
+  storage:
+{{ toYaml .storageSpec | indent 4 }}
+{{- end }}
+{{- if .priorityClassName }}
+  priorityClassName: "{{ .priorityClassName }}"
+{{- end }}
+{{- if .nodeSelector }}
+  nodeSelector:
+{{ toYaml .nodeSelector | indent 4 }}
+{{- end }}
+  securityContext:
+{{- if .securityContext }}
+{{ toYaml .securityContext | indent 4 }}
+{{- else }}
+    runAsUser: 1000
+    fsGroup: 1000
+{{- end }}
+{{- if .tolerations }}
+  tolerations:
+{{ toYaml .tolerations | indent 4 }}
+{{- end }}
+{{- if .sidecars }}
+  sidecars:
+{{ toYaml .sidecars | indent 4 }}
+{{- end }}
+
+{{- end }}
+{{- end }}
+{{- end }}

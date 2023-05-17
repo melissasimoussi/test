@@ -1,0 +1,125 @@
+---
+# name of instances
+name: argocd
+
+# this is for argo type deployments of this chart (set to true)
+ignoreHelmHooks: false
+
+# add to this list to deploy team instances to these namespaces
+namespaces: ""
+
+
+# operator manages upgrades
+operator:
+  channel: alpha
+  installPlanApproval: Automatic
+  name: argocd-operator
+  sourceName: operatorhubio-catalog
+  sourceNamespace: olm
+  clusterArgoCD: true
+  operatorgroup: true
+
+# see the TEAM_DOCS.md for more information
+teamInstancesAreClusterScoped: true
+
+# adding your secrets for git access or other repository credentials
+secrets: []
+# EXAMPLE ...
+# secrets:
+#   - name: git-auth
+#     username: 'user'
+#     password: 'pass1234'
+#     sshPrivateKey: ''
+
+# https://argocd-operator.readthedocs.io/en/latest/reference/argocd/
+argocd_cr:
+  version: v0.0.11
+  image: quay.io/syself/argocd
+
+  repo:
+    image: quay.io/syself/argocd
+    version: v0.0.11
+  applicationSet: {}
+  notifications:
+    enabled: true
+
+  rbac:
+    defaultPolicy: 'role:admin'
+    policy: |
+      g, system:cluster-admins, role:admin
+      g, ArgoCDAdmins, role:admin
+    scopes: '[groups]'
+  resourceExclusions: |
+    - apiGroups:
+        - tekton.dev
+      clusters:
+        - '*'
+      kinds:
+        - TaskRun
+        - PipelineRun
+    - apiGroups:
+        - cilium.io
+      kinds:
+        - CiliumIdentity
+      clusters:
+        - "*"
+  # You can also create a new secret with a key and label it with app.kubernetes.io/part-of: argocd
+
+  configManagementPlugins: |-
+    - name: helmfile
+      init:
+        command: ["/bin/bash", "-c"]
+        args:
+          - >
+            helmfile repos ;
+            helm dependency update ;
+            true
+      generate:
+        command: ["/bin/bash", "-c"]
+        args: ["helmfile --namespace $ARGOCD_APP_NAMESPACE template --skip-deps | sed -e '1,/---/d' | sed -e 's|apiregistration.k8s.io/v1beta1|apiregistration.k8s.io/v1|g'"]
+  controller:
+    processors: {}
+    sharding: {}
+  ha:
+    enabled: true
+  server:
+    config:
+      url: 
+    autoscale:
+      enabled: true
+      hpa:
+        maxReplicas: 3
+        minReplicas: 1
+        scaleTargetRef:
+          apiVersion: extensions/v1beta1
+          kind: Deployment
+          name: argocd-server
+        targetCPUUtilizationPercentage: 50
+    insecure: true # TLS Terminations happens on the reverse proxy
+    grpc:
+      host: argocd-grpc.gxfs.dev
+      ingress:
+        enabled: true
+        ingressClassName: "nginx"
+        annotations:
+          kubernetes.io/ingress.class: "nginx"
+          nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+        tls:
+          - secretName: argocd-wildcard
+
+    host: argocd-integration.gxfs.dev
+    ingress:
+      enabled: true
+      ingressClassName: "nginx"
+      annotations:
+        kubernetes.io/ingress.class: "nginx"
+        nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+      tls:
+        - secretName: argocd-wildcard
+          
+
+  # initialRepositories: 
+
+
+  repositoryCredentials: null

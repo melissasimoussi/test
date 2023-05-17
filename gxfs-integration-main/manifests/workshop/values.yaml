@@ -1,0 +1,32 @@
+proof:
+  port: 3007
+  namespace: ocm
+  service: proof-manager
+  enabled: false
+attestation: 
+  port: 3005
+  namespace: ocm
+  service: attestation-manager
+  enabled: false
+connection:
+  port: 3003
+  namespace: ocm
+  service: connection-manager
+  enabled: false
+policy:
+  port: 8080
+  namespace: tsa
+  service: policy
+  enabled: true
+signer:
+  port: 8080
+  namespace: tsa
+  service: signer
+  enabled: true
+ingress:
+  tlsEnabled: true
+  frontendDomain: integration.gxfs.dev
+  frontendTlsSecretName: argocd-wildcard
+  annotations:
+     kubernetes.io/ingress.class: nginx
+     nginx.ingress.kubernetes.io/rewrite-target: /$2

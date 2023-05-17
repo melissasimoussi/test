@@ -1,0 +1,18 @@
+source: https://github.com/syself/gxfs-workshop.git
+sourceRef: main
+namespace: argocd
+project: base
+
+applications:
+- name: postgres-operator
+  namespace: postgres-operator
+  enabled: true 
+  source: https://cloudnative-pg.github.io/charts
+  sourceRef: 0.17.1
+  chartName: cloudnative-pg
+  values:
+    enabled: true
+    fullnameOverride: "postgres-operator"
+    crds:
+      create: true
+    replicaCount: 1

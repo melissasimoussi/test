@@ -1,0 +1,6 @@
+{
+  "trustlist": [
+    "did:web:123",
+    "did:web:abc"
+  ]
+}

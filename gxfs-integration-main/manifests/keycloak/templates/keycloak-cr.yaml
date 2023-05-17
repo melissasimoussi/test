@@ -1,0 +1,18 @@
+---
+apiVersion: k8s.keycloak.org/v2alpha1
+kind: Keycloak
+metadata:
+  name: {{ .Values.name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Values.name }}
+  annotations:
+    argocd.argoproj.io/sync-options: "SkipDryRunOnMissingResource=true"
+    {{- if not .Values.ignoreHelmHooks }}
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "25"
+    {{- end }}
+spec:
+  {{- if $.Values.keycloak_cr }}
+  {{- $.Values.keycloak_cr | toYaml | trim | nindent 2 }}
+  {{- end }}

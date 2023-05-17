@@ -1,0 +1,8 @@
+apiVersion: v2
+name: redis
+description: |
+  This chart install and configures: 
+  * redis cluster template
+  * redis standalone template
+type: application
+version: "0"

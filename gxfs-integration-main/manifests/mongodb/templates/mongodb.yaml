@@ -1,0 +1,39 @@
+{{- $mongodbName := printf "%s-mongodb" .Values.fullnameOverride }}
+{{- $mongodbPassword := printf "%s" .Values.fullnameOverride }}
+apiVersion: mongodbcommunity.mongodb.com/v1
+kind: MongoDBCommunity
+metadata:
+  name: {{ $mongodbName }}
+  namespace: {{ .Release.Namespace }}
+  labels: 
+    {{- include "mongodb-operator-databases.labels" . | nindent 4 }}
+spec:
+  members: {{ .Values.mongodb.members }}
+  type: ReplicaSet
+  version: {{ .Values.mongodb.version }}
+  security:
+    authentication:
+      modes: ["SCRAM"]
+  users:
+    - name: {{ .Values.mongodb.dbName }}
+      db: {{ .Values.mongodb.dbName }}
+      passwordSecretRef:
+        name: {{ $mongodbPassword }}
+      roles:
+        - name: clusterAdmin
+          db: {{ .Values.mongodb.dbName }}
+        - name: userAdminAnyDatabase
+          db: {{ .Values.mongodb.dbName }}
+      scramCredentialsSecretName: {{ .Values.mongodb.dbName }}-scram
+  statefulSet:
+    spec:
+      volumeClaimTemplates:
+        - metadata:
+            name: data-volume
+          spec:
+            accessModes:
+            - ReadWriteOnce
+            resources:
+              requests:
+                storage:  {{ .Values.mongodb.size }}
+            storageClassName: {{ .Values.mongodb.storageClass }}

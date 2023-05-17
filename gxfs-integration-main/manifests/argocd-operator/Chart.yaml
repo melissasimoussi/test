@@ -1,0 +1,7 @@
+apiVersion: v2
+description: |
+  This chart installs and configures:
+  * ArgoCD Operator
+  * ArgoCD itself
+name: argocd-operator
+version: "0"

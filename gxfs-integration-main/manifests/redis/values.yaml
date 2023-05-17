@@ -1,0 +1,172 @@
+# this is for argo type deployments of this chart (set to true)
+ignoreHelmHooks: false
+
+# operator manages upgrades
+operator:
+  enabled: false
+  channel: stable
+  installPlanApproval: Automatic
+  name: redis-operator
+  sourceName: operatorhubio-catalog
+  sourceNamespace: olm
+  operatorgroup: true
+
+redis:
+- name: test-redis
+  enabled: false
+  clusterSize: 3
+  image: quay.io/opstree/redis
+  persistenceEnabled: true
+  tag: v7.0.5
+  leader:
+    replicas: 3
+  follower: 
+    replicas: 3
+  pdb:
+    enabled: true
+    minAvailable: 1
+  storageSpec:
+    volumeClaimTemplate:
+      spec:
+        storageClassName: cinder-default
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+# redis:
+# - name: test-redis
+#   enabled: false
+#   clusterSize: 3
+#   clusterVersion: v7
+#   persistenceEnabled: true
+#   image: quay.io/opstree/redis
+#   tag: v7.0.5
+#   imagePullPolicy: IfNotPresent
+#   # redisSecret:
+#   #   secretName: redis-secret
+#   #   secretKey: password
+#   leader:
+#     replicas: 3
+#     serviceType: ClusterIP
+#     affinity: {}
+#       # nodeAffinity:
+#       #   requiredDuringSchedulingIgnoredDuringExecution:
+#       #     nodeSelectorTerms:
+#       #     - matchExpressions:
+#       #       - key: disktype
+#       #         operator: In
+#       #         values:
+#       #         - ssd
+#   follower:
+#     replicas: 3
+#     serviceType: ClusterIP
+#     affinity: {}
+#       # nodeAffinity:
+#       #   requiredDuringSchedulingIgnoredDuringExecution:
+#       #     nodeSelectorTerms:
+#       #     - matchExpressions:
+#       #       - key: disktype
+#       #         operator: In
+#       #         values:
+#       #         - ssd
+#   resources: {}
+#     # requests:
+#     #   cpu: 100m
+#     #   memory: 128Mi
+#     # limits:
+#     #   cpu: 100m
+#     #   memory: 128Mi
+
+#   # labels:
+#   #   foo: bar
+#   #   test: echo
+
+#   pdb:
+#     enabled: true
+#     maxUnavailable: 1
+#     minAvailable: 1
+
+#   externalConfig:
+#     enabled: true
+#     data: |
+#       tcp-keepalive 400
+#       slowlog-max-len 158
+#       stream-node-max-bytes 2048
+#   externalService:
+#     enabled: true
+#     # annotations:
+#     #   foo: bar
+#     serviceType: LoadBalancer
+#     port: 6379
+
+#   serviceMonitor:
+#     enabled: true
+#     interval: 30s
+#     scrapeTimeout: 10s
+#     namespace: monitoring
+
+#   redisExporter:
+#     enabled: true
+#     image: quay.io/opstree/redis-exporter
+#     tag: "v1.44.0"
+#     imagePullPolicy: IfNotPresent
+#     resources: {}
+#       # requests:
+#       #   cpu: 100m
+#       #   memory: 128Mi
+#       # limits:
+#       #   cpu: 100m
+#       #   memory: 128Mi
+
+#   sidecars: []
+#     # - name: "sidecar1"
+#     #   image: "image:1.0"
+#     #   imagePullPolicy: Always
+#     #   resources:
+#     #     limits:
+#     #       cpu: 50m
+#     #       memory: 64Mi
+#     #     requests:
+#     #       cpu: 10m
+#     #       memory: 32M
+#     #   env:
+#     #   - name: VAR_NAME
+#     #     value: "value1"
+
+#   # priorityClassName: "-"
+
+#   nodeSelector: {}
+#     # memory: medium
+
+#   storageSpec:
+#     volumeClaimTemplate:
+#       spec:
+#         # storageClassName: standard
+#         accessModes: ["ReadWriteOnce"]
+#         resources:
+#           requests:
+#             storage: 1Gi
+#     #   selector: {}
+
+#   securityContext:
+#     runAsUser: 1000
+#     fsGroup: 1000
+
+#   affinity: {}
+#     # nodeAffinity:
+#     #   requiredDuringSchedulingIgnoredDuringExecution:
+#     #     nodeSelectorTerms:
+#     #     - matchExpressions:
+#     #       - key: disktype
+#     #         operator: In
+#     #         values:
+#     #         - ssd
+
+
+
+
+
+
+
+
+

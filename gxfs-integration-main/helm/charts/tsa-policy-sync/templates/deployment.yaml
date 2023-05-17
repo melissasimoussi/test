@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: "{{ template "app.name" . }}"
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.labels" . | nindent 8 }}
+      annotations:
+        {{- if .Values.podAnnotations }}
+        {{ toYaml .Values.podAnnotations | indent 8 }}
+        {{- end }}
+    spec:
+      imagePullSecrets:
+      {{- if .Values.image.pullSecrets }}
+        - name: {{ .Values.image.pullSecrets }}
+      {{- end }}
+      containers:
+          - name: {{ .Chart.Name }}
+            image: {{ .Values.image.repository }}/{{ .Values.image.name }}
+            imagePullPolicy: {{ .Values.image.pullPolicy | quote }}
+            env:
+              - name: "DB_ADDR"
+                value: {{ .Values.sync.DB_ADDR }}
+                {{- if .Values.sync.DB_USER }}
+              - name: "DB_USER"
+                value: {{ .Values.sync.DB_USER }}
+                {{- end }}
+                {{- if .Values.sync.DB_PASS }}
+              - name: "DB_PASS"
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .Values.sync.DB_PASS }}
+                    key: {{ .Values.sync.DB_PASS_KEY }}
+                {{- end }}
+              - name: "POLICY_REPO"
+                value: {{ .Values.sync.POLICY_REPO }}
+                {{- if .Values.sync.POLICY_REPO_FOLDER }}
+              - name: "POLICY_REPO_FOLDER"
+                value: {{ .Values.sync.POLICY_REPO_FOLDER }}
+                {{- end }}
+                {{- if .Values.sync.POLICY_REPO_USER }}
+              - name: "POLICY_REPO_USER"
+                value: {{ .Values.sync.POLICY_REPO_USER }}  
+                {{- end }}
+                {{- if .Values.sync.POLICY_REPO_PASS }}
+              - name: "POLICY_REPO_PASS"
+                value: {{ .Values.sync.POLICY_REPO_PASS }}
+                valueFrom:
+                  secretKeyRef:
+                    name: {{ .Values.sync.POLICY_REPO_PASS }}-policy-sync-secret
+                    key: token  
+                {{- end }}
+                {{- if .Values.sync.SYNC_INTERVAL }}
+              - name: "SYNC_INTERVAL"
+                value: {{ .Values.sync.SYNC_INTERVAL }} 
+                {{- end }}
+              - name: "KEEP_ALIVE"
+                value: {{ .Values.sync.KEEP_ALIVE }}
+                {{- if .Values.sync.POLICY_REPO_BRANCH }}
+              - name: "POLICY_REPO_BRANCH"
+                value: {{ .Values.sync.POLICY_REPO_BRANCH }}
+                {{- end }}
+              - name: "DB_NAME"
+                value: {{ .Values.sync.DB_NAME }}
+

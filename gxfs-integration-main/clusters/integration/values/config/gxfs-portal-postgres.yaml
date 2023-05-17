@@ -1,0 +1,24 @@
+fullnameOverride: gxfs-portal-postgres
+ignoreHelmHooks: true
+postgres:
+  - name: gxfs-portal-postgres
+    enabled: true
+    instances: 1
+    imageName: ghcr.io/cloudnative-pg/postgresql:15.1  # https://github.com/cloudnative-pg/postgres-containers/pkgs/container/postgresql
+    resources:
+      requests:
+        cpu: "20m"
+        memory: "64Mi"
+    storage:
+      size: 2Gi
+      storageClass: standard
+      resizeInUseVolumes: true
+    pooler:
+      - enabled: true
+        type: rw
+        instances: 3
+        pgbouncer:
+          poolMode: session
+          authQuerySecret:
+            name: integratio-db-superuser
+          authQuery: SELECT usename, passwd FROM pg_shadow WHERE usename=$1

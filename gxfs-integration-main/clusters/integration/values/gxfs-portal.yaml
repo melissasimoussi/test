@@ -1,0 +1,429 @@
+source: https://gitlab.com/gaia-x/data-infrastructure-federation-services/gxfs-integration.git
+sourceRef: main
+project: gxfs-portal
+
+applications:
+  - name: configuration-service
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/por/helm
+    chartName: configuration-service
+    sourceRef: 1.5.2
+    values:
+      config:
+        configmapName: configuration-service-gxfs-portal
+        configmapNamespace: gxfs-portal
+      data: |-
+        {
+          "oidc": {
+             "external": {
+                "authority": "https://aas-integration.gxfs.dev",
+                "redirectUri": "https://integration.gxfs.dev/",
+                "scope": "profile openid email",
+                "response_type": "code",
+                "client_id": "gxfs-portal"     
+              },
+              "internal": {
+              "authority": "https://sso-integration.gxfs.dev",
+              "realm": "intranet",
+              "client_id": "credentials"
+              }
+            },
+          "claimServiceBaseUrl": "...",
+          "claimNameMappings": {
+            "fedId": "fedId"
+          },
+          "claims": {
+              "claim-mapping": "b41291a3-1f97-44c5-b6e8-25ea627ac6b8",
+              "did-management": "b41291a3-1f97-44c5-b7e8-25ea627ac6b8",
+              "notarization-request" : "b41291a3-1f97-44c5-b6e8-25ea627ac6b9",
+              "notarization-process" : "b41291a3-1f97-54c5-b6e8-25ea627ac6b9",
+              "services": "b41291a3-1f97-44c5-b6e8-25ea629ac6b8",
+              "articles": "b41291a3-1f97-44c5-b6e9-25ea629ac6b8",
+              "invitiation" : "b41291a3-1f97-44c5-b6e9-25ea629ac6b8",
+              "resource-deploy" : "b41291a3-1f97-44c5-b6e9-25ea629ac6b8"
+          },
+          "defaultContext": "32dc6801-0f9c-40e4-9e16-f440b47192ae"
+        }
+      ingress:
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/configuration(/|$)(.*)
+                port: 8080
+
+  - name: portal-frontend
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/por/helm
+    chartName: integration
+    sourceRef: 1.2.1
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/por/portal-integration
+        name: portal-integration
+        tag: "838244176"
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+          nginx.ingress.kubernetes.io/backend-protocol: HTTP
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /
+                port: 80
+
+  - name: portal-postgres
+    namespace: gxfs-portal
+    enabled: true
+    sourcePath: manifests/postgres
+    values:
+      fullnameOverride: portal-postgres
+      ignoreHelmHooks: true
+      postgres:
+        - name: portal-postgres-db
+          enabled: true
+          instances: 3
+          storage:
+            size: 2Gi
+            storageClass: cinder-default
+          pooler:
+            - enabled: true
+              type: rw
+              instances: 3
+              pgbouncer:
+                poolMode: session
+                authQuerySecret:
+                  name: integratio-db-superuser
+                authQuery: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
+
+  - name: claim-mapping-service
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/por/helm
+    chartName: claim-mapping-service
+    sourceRef: 1.3.14
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    syncPolicy:
+      syncOptions:
+        - RespectIgnoreDifferences=true
+    values:
+      image:
+        pullPolicy: Always
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/claim-mapping(/|$)(.*)
+                port: 8080
+      postgres:
+        superUser:
+          usernameSecret:
+            name: portal-postgres-db-superuser
+            key: username
+          passwordSecret:
+            name: portal-postgres-db-superuser
+            key: password
+        username: claim-mapping
+        database: claim-mapping
+        schema: public
+        host:
+          name: portal-postgres-db-rw.gxfs-portal.svc.cluster.local
+          port: 5432
+      config:
+        tokenRolesPath: "$.roles"
+        tokenContextPath: "$.fedId"
+        identityProviderOidURL: "http://aas.aas.svc.cluster.local:9000"
+        tsaURLs:
+          - default: "default policy URL"
+          - fake: "fake policy URL"
+        defaultClaims:
+          [
+            {
+              "Roles": ["gaia-x-admin"],
+              "Context": "*",
+              "Claims": ["claim-mapping", "principal-invitation"],
+            },
+          ]
+
+  - name: did-management
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/41175300/packages/helm/Integration/
+    chartName: did-management-service
+    sourceRef: 1.0.10
+    values:
+      image:
+        pullPolicy: Always
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/did-management(/|$)(.*)
+                port: 8080
+      config:
+        baseURL: did:web:integration.gxfs.dev:api:dynamic:did
+        basePath: /did
+        cryptoAlgo: ecdsa-p256
+        identityProviderOidURL: https://aas-integration.gxfs.dev
+        tokenRolesPath: "$.roles"
+        tokenContextPath: "$.fedId"
+        requiredClaims:
+          [
+            {
+              "context": "32dc6801-0f9c-40e4-9e16-f440b47192ae",
+              "claims": ["did-management"],
+            },
+          ]
+        claimMappingUrl: http://claim-mapping-service.gxfs-portal.svc.cluster.local:8080/claims
+        vaultURL: http://vault.vault.svc.cluster.local:8200
+        vaultToken:
+          key: token
+          name: vault-token-secret
+        kongAdminApiURL: http://kong-kong-admin.kong.svc.cluster.local:8001
+        tsaGetDidConfigurationUrl: tsaGetDidConfigurationUrl
+        tsaSaveDidConfigurationUrl: tsaSaveDidConfigurationUrl
+        tsaServiceUrl: http://policy.tsa.svc.cluster.local:8080/policy/policies/returnDID/1.0/evaluation
+        ocmEndpoints: http://ssi-abstraction.ocm.svc.cluster.local:3010/agent
+
+  - name: self-description-management
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/43143313/packages/helm/Integration/
+    chartName: self-description-management
+    sourceRef: 1.0.0
+    values:
+      image:
+        pullPolicy: Always
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/self-descriptions(/|$)(.*)
+                port: 3000
+      service:
+        port: 3000
+      server:
+        http:
+          port: 3000
+      config:
+        signerService: http://signer.tsa.svc.cluster.local:8080/v1/credential/proof
+
+  - name: proof-management-service
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/43396422/packages/helm/Integration/
+    chartName: proof-management-service
+    sourceRef: 1.0.2
+    values:
+      image:
+        name: proof-management-service
+        pullPolicy: Always
+      ingress:
+        enabled: false
+      service:
+        port: 3000
+      server:
+        http:
+          port: 3000
+      config:
+        ssiAbstraction: http://ssi-abstraction.ocm-provider.svc.cluster.local:3010
+
+  - name: federated-catalogue-management
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/43247573/packages/helm/Integration/
+    chartName: federated-catalogue-management
+    sourceRef: 1.0.13
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/por
+        name: federated-catalogue-management
+        tag: latest
+        pullPolicy: Always
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/catalogue(/|$)(.*)
+                port: 3000
+      service:
+        port: 3000
+      server:
+        http:
+          port: 3000
+      config:
+        RESOLVER: https://dev.uniresolver.io/1.0/identifiers/
+        PROOF_OCM: http://proof-manager.ocm.svc.cluster.local:3007/v1
+        CM_OCM: http://connection-manager.ocm.svc.cluster.local:3003/v1/accept-connection-invitation
+
+
+  - name: principal-creation-service
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gitlab.com/api/v4/projects/41175333/packages/helm/Integration/
+    chartName: principal-creation-service
+    sourceRef: 1.0.13
+    ignoreDifferences:
+      - group: ""
+        kind: "Secret"
+        jsonPointers:
+          - /data
+    values:
+      server:
+        http:
+          port: 8080
+      image:
+        pullPolicy: Always
+      ingress:
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/principal(/|$)(.*)
+                port: 8080
+      config:
+        inviteIdentityProviderOidURL: "https://aas-integration.gxfs.dev"
+        createIdentityProviderOidURL: "https://sso-integration.gxfs.dev/realms/intranet"
+        mail:
+          mailSupportAddress: portal@gxfs.dev
+          mailSmtpHost: in-v3.mailjet.com
+          mailSmtpPort: "'587'"
+          mailSmtpUsername: 76963a06868f47d22138c95280547219
+          mailSmtpPassword: mailSmtpPassword
+          mailTemplate: '<html><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><title>GXFS Integration Invitation</title></head><body><p>{{index . "message"}}<p><img src="cid:invitation.png" alt="invitation" /></p></p></body>'
+          mailTemplateKeys: '''[{"key":"fedId"},{"key":"message"},{"key":"FirstName"},{"key":"LastName"}]'''
+        createAdminRolePath: $.realm_access.roles
+        inviteAdminRolePath: $.roles
+        adminRoles: '''["gaia-x-admin"]'''
+        credentialMapping:
+          {
+            "FirstName": "given_name",
+            "LastName": "family_name",
+            "FederationId": "fedId",
+            "MiddleName": "middle_name",
+            "PreferredUsername": "preferred_username",
+            "Gender": "gender",
+            "Email": "email",
+            "Birthdate": "birthdate",
+          }
+        credentialDataTemplate:
+          {
+            "FirstName": "",
+            "LastName": "",
+            "FederationId": "",
+            "MiddleName": "",
+            "PreferredUsername": "",
+            "Gender": "",
+            "Email": "",
+            "Birthdate": "",
+          }
+        credentialEndpoint: http://principal-manager.ocm.svc.cluster.local:3008/v1/map-user-info
+        claimMappingServiceURL: http://claim-mapping-service.gxfs-portal.svc.cluster.local:8080
+
+  - name: articles
+    namespace: gxfs-portal
+    enabled: true
+    source: https://gaia-x.gitlab.io/data-infrastructure-federation-services/gxfs-integration/applications/por/helm
+    chartName: articles
+    sourceRef: 1.1.1
+    values:
+      image:
+        repository: registry.gitlab.com/gaia-x/data-infrastructure-federation-services/por/article-service
+        name: portal-article-service
+        tag: "729664720"
+      applicationConfig:
+        services:
+          articles:
+            uri:
+              internal: http://gaia-x.identity.local:8081/demo/api
+        spring:
+          mvc.pathmatch.matching-strategy: ANT_PATH_MATCHER
+          datasource:
+            url: jdbc:h2:mem:testdb
+            driverClassName: org.h2.Driver
+            username: sa
+            password: password
+          jpa:
+            database-platform: org.hibernate.dialect.H2Dialect
+          security:
+            oauth2:
+              resourceserver:
+                jwt:
+                  issuer-uri: https://aas-integration.gxfs.dev
+      ingress:
+        enabled: true
+        ingressClassName: nginx
+        annotations:
+          kubernetes.io/ingress.class: nginx
+          nginx.ingress.kubernetes.io/rewrite-target: /$2
+        tls:
+          - secretName: argocd-wildcard
+            hosts:
+              - integration.gxfs.dev
+        hosts:
+          - host: integration.gxfs.dev
+            paths:
+              - path: /api/articles(/|$)(.*)
+                port: 8084

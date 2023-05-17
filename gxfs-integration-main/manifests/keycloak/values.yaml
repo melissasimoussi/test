@@ -1,0 +1,90 @@
+---
+# name of instances
+name: keycloak
+
+# this is for argo type deployments of this chart (set to true)
+ignoreHelmHooks: false
+
+# operator manages upgrades
+operator:
+  channel: fast
+  installPlanApproval: Automatic
+  name: keycloak-operator
+  sourceName: operatorhubio-catalog
+  sourceNamespace: olm
+  operatorgroup: true
+
+
+keycloak_cr:
+  instances: 1
+  ingress:
+    enabled: false
+  http:
+    httpEnabled: true
+  db:
+    vendor: postgres
+    host: keycloak-rw
+    port: 5432
+    database: app
+    usernameSecret:
+      name: keycloak-app
+      key: username
+    passwordSecret:
+      name: keycloak-app
+      key: password
+  hostname:
+    hostname: sso.example.com
+
+postgres:
+  - name: keycloak
+    enabled: true
+    instances: 3
+    storage:  
+      size: 10Gi
+      storageClass: cinder-default
+    pooler:
+      - enabled: true
+        type: rw
+        instances: 3
+        pgbouncer:
+          poolMode: session
+          authQuerySecret:
+            name: keycloak-superuser
+          authQuery: SELECT usename, passwd FROM pg_shadow WHERE usename=$1
+
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP
+  ingressClassName: nginx
+  hosts:
+    - host: "sso.example.com"
+      paths:
+        - /
+  tls:
+    - secretName: keycloak-wildcard
+      hosts:
+        - "sso.example.com"
+service:
+  annotations: {}
+
+externalKeycloak:
+  
+
+# keycloakRealm:
+# - name: test
+#   id: test
+#   realm: test
+#   displayName: test
+
+# keycloakClient:
+# - clientId: "test"
+#   secret: "test"
+#   redirectUris:
+#     - "https://argocd.example.com/auth/callback"
+
+# keycloakUsers:
+# - name: doe
+#   username: doe.jon
+#   first_name: jon
+#   password: test
+#   email: example.com

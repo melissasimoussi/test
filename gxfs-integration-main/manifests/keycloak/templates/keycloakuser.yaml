@@ -1,0 +1,32 @@
+{{- if hasKey .Values "keycloakUsers" -}}
+{{- range $ku := .Values.keycloakUsers }}
+---
+apiVersion: legacy.k8s.keycloak.org/v1alpha1
+kind: KeycloakUser
+metadata:
+  name: {{ .username }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  labels:
+    app: {{ $.Values.name }}
+spec:
+  user:
+    username: {{ .username }}
+    firstName: {{ .first_name }}
+    lastName: {{ .name }}
+    email: {{ .email | quote }}
+    enabled: true
+    emailVerified: true
+    credentials:
+      - temporary: false
+        type: password
+        value: {{ .password | quote }}
+    clientRoles:
+      account:
+        - manage-account
+  realmSelector:
+    matchLabels:
+      app: {{ $.Values.name }}
+{{- end }}
+{{- end }}

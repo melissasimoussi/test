@@ -1,0 +1,23 @@
+{{- if hasKey .Values "keycloakRealm" }}
+{{- range $kr := .Values.keycloakRealm }}
+---
+apiVersion: legacy.k8s.keycloak.org/v1alpha1
+kind: KeycloakRealm
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  labels:
+    app: {{ $.Values.name }}
+spec:
+  realm:
+    id: {{ .id  }}
+    realm: {{ .realm }}
+    enabled: true
+    displayName: {{ .displayName }}
+  instanceSelector:
+    matchLabels:
+      app: {{ $.Values.name }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,12 @@
+source: https://github.com/syself/gxfs-workshop.git
+sourceRef: main
+namespace: argocd
+project: gitops
+
+applications:
+- name: argocd
+  namespace: argocd
+  enabled: true
+  sourcePath: manifests/argocd
+  helmValues:
+    - ../../clusters/testing/values/config/gitops-config.yaml
